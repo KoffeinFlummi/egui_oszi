@@ -267,15 +267,15 @@ impl<X: TimeseriesXAxis> TimeseriesLineMemory<X> {
 }
 
 pub struct TimeseriesGroup {
-    pub(crate) link_group_name: &'static str,
+    pub(crate) link_group_name: String,
     pub(crate) link_y: bool,
     pub(crate) last_view_width: Option<f64>,
 }
 
 impl TimeseriesGroup {
-    pub fn new(name: &'static str, link_y: bool) -> Self {
+    pub fn new(name: impl ToString, link_y: bool) -> Self {
         Self {
-            link_group_name: name,
+            link_group_name: name.to_string(),
             link_y,
             last_view_width: None,
         }
@@ -320,7 +320,7 @@ impl TimeseriesGroup {
 #[derive(Debug)]
 pub struct TimeseriesPlotMemory<X> {
     pub(crate) id: egui::Id,
-    lines: HashMap<&'static str, TimeseriesLineMemory<X>>,
+    lines: HashMap<String, TimeseriesLineMemory<X>>,
     downsampling_method: DownsamplingMethod,
     pub(crate) reset_auto_bounds_next_frame: bool,
     pub(crate) last_view_width: f64,
@@ -368,7 +368,7 @@ impl<X: TimeseriesXAxis> TimeseriesPlotMemory<X> {
         I: Iterator<Item = (X, Option<f64>)> + ExactSizeIterator + DoubleEndedIterator + 'a,
     >(
         &mut self,
-        line_id: &'static str,
+        line_id: &String,
         line_iterator: I,
     ) where
         X: 'a,
@@ -378,7 +378,7 @@ impl<X: TimeseriesXAxis> TimeseriesPlotMemory<X> {
 
         if !self.lines.contains_key(line_id) {
             self.lines
-                .insert(line_id, TimeseriesLineMemory::new(self.downsampling_method));
+                .insert(line_id.clone(), TimeseriesLineMemory::new(self.downsampling_method));
         }
 
         self.lines
@@ -390,7 +390,7 @@ impl<X: TimeseriesXAxis> TimeseriesPlotMemory<X> {
     /// Returns the data to be plotted for the given line and current plot bounds.
     ///
     /// Called by [crate::TimeseriesPlot] when needed.
-    pub fn plot(&mut self, line_id: &'static str, plot_bounds: PlotBounds) -> Vec<[f64; 2]> {
+    pub fn plot(&mut self, line_id: &String, plot_bounds: PlotBounds) -> Vec<[f64; 2]> {
         self.lines
             .get_mut(line_id)
             .map(|l| l.plot(plot_bounds))

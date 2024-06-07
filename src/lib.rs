@@ -15,19 +15,19 @@ pub enum ViewMode {
 }
 
 pub struct TimeseriesLine {
-    id: &'static str,
+    id: String,
     label: Option<String>,
     unit: Option<String>,
     color: Option<Color32>,
 }
 
 impl TimeseriesLine {
-    pub fn new(id: &'static str) -> Self {
-        let label = id.to_string();
+    pub fn new(id: impl ToString) -> Self {
+        let id = id.to_string();
 
         Self {
-            id,
-            label: Some(label), // TODO?
+            id: id.clone(),
+            label: Some(id), // TODO?
             unit: None,
             color: None,
         }
@@ -116,7 +116,7 @@ impl<'mem, X: TimeseriesXAxis> TimeseriesPlot<'mem, X> {
         iterator: I,
     ) -> Self {
         self.memory
-            .update_cache(line.id, iterator.map(|(t, y)| (t, Some(y))));
+            .update_cache(&line.id, iterator.map(|(t, y)| (t, Some(y))));
         self.lines.push(line);
         self
     }
@@ -149,8 +149,8 @@ impl<'a, X: TimeseriesXAxis> egui::widgets::Widget for TimeseriesPlot<'a, X> {
 
             self.plot = self
                 .plot
-                .link_axis(group.link_group_name, true, group.link_y)
-                .link_cursor(group.link_group_name, true, group.link_y);
+                .link_axis(group.link_group_name.clone(), true, group.link_y)
+                .link_cursor(group.link_group_name.clone(), true, group.link_y);
         }
 
         if let ViewMode::AttachedToEdge(_duration) = self.view_mode {
@@ -175,7 +175,7 @@ impl<'a, X: TimeseriesXAxis> egui::widgets::Widget for TimeseriesPlot<'a, X> {
                 for line in self.lines {
                     // TODO: cropping
 
-                    let points = PlotPoints::new(self.memory.plot(line.id, plot_ui.plot_bounds()));
+                    let points = PlotPoints::new(self.memory.plot(&line.id, plot_ui.plot_bounds()));
 
                     let mut egui_line = egui_plot::Line::new(points);
                     if let Some(label) = line.label {
