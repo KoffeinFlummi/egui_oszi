@@ -92,7 +92,6 @@ impl<X: TimeseriesXAxis> TimeseriesLineMemory<X> {
         &mut self,
         data: I,
     ) {
-        println!("rebuilding caches");
         self.clear_caches();
         self.extend_caches(data);
     }
@@ -248,7 +247,7 @@ impl<X: TimeseriesXAxis> TimeseriesLineMemory<X> {
                     points.insert(0, [cache_level[0][0], previous_first_y]);
                 }
 
-                if i_end < cache_level.len() - 1 {
+                if cache_level.len() > 1 && i_end < cache_level.len() - 1 && points.len() > 0 {
                     let previous_last_y = points[points.len() - 1][1];
                     points.push([cache_level[cache_level.len() - 1][0], previous_last_y]);
                 }
