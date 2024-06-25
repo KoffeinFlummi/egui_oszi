@@ -109,14 +109,15 @@ impl<'mem, X: TimeseriesXAxis> TimeseriesPlot<'mem, X> {
 
     pub fn line<
         'draw,
-        I: Iterator<Item = (X, f64)> + ExactSizeIterator + DoubleEndedIterator + 'draw,
+        T: Into<f64>,
+        I: Iterator<Item = (X, T)> + ExactSizeIterator + DoubleEndedIterator + 'draw,
     >(
         mut self,
         line: TimeseriesLine,
         iterator: I,
     ) -> Self {
         self.memory
-            .update_cache(&line.id, iterator.map(|(t, y)| (t, Some(y))));
+            .update_cache(&line.id, iterator.map(|(t, y)| (t, Some(y.into()))));
         self.lines.push(line);
         self
     }
