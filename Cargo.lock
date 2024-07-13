@@ -658,6 +658,7 @@ dependencies = [
  "egui_extras",
  "egui_plot",
  "log",
+ "num-traits",
  "puffin",
  "puffin_egui",
 ]

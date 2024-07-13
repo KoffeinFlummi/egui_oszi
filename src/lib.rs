@@ -44,16 +44,16 @@ impl TimeseriesLine {
     }
 }
 
-pub struct TimeseriesPlot<'mem, X> {
-    memory: &'mem mut TimeseriesPlotMemory<X>,
+pub struct TimeseriesPlot<'mem, X, Y> {
+    memory: &'mem mut TimeseriesPlotMemory<X, Y>,
     group: Option<&'mem mut TimeseriesGroup>,
     plot: egui_plot::Plot,
     lines: Vec<TimeseriesLine>,
     view_mode: ViewMode,
 }
 
-impl<'mem, X: TimeseriesXAxis> TimeseriesPlot<'mem, X> {
-    pub fn new(memory: &'mem mut TimeseriesPlotMemory<X>) -> Self {
+impl<'mem, X: TimeseriesXAxis, Y: Default + num_traits::Float + num_traits::float::TotalOrder + Into<f64>> TimeseriesPlot<'mem, X, Y> {
+    pub fn new(memory: &'mem mut TimeseriesPlotMemory<X, Y>) -> Self {
         let id = memory.id;
         Self {
             memory,
@@ -96,8 +96,8 @@ impl<'mem, X: TimeseriesXAxis> TimeseriesPlot<'mem, X> {
         self
     }
 
-    pub fn include_y<Y: Into<f64>>(mut self, y: Y) -> Self {
-        self.plot = self.plot.include_y(y.into());
+    pub fn include_y(mut self, y: Y) -> Self {
+        self.plot = self.plot.include_y(y);
         self
     }
 
@@ -109,15 +109,14 @@ impl<'mem, X: TimeseriesXAxis> TimeseriesPlot<'mem, X> {
 
     pub fn line<
         'draw,
-        T: Into<f64>,
-        I: Iterator<Item = (X, T)> + ExactSizeIterator + DoubleEndedIterator + 'draw,
+        I: Iterator<Item = (X, Y)> + ExactSizeIterator + DoubleEndedIterator + 'draw,
     >(
         mut self,
         line: TimeseriesLine,
         iterator: I,
     ) -> Self {
         self.memory
-            .update_cache(&line.id, iterator.map(|(t, y)| (t, Some(y.into()))));
+            .update_cache(&line.id, iterator.map(|(t, y)| (t, Some(y))));
         self.lines.push(line);
         self
     }
@@ -137,7 +136,7 @@ impl<'mem, X: TimeseriesXAxis> TimeseriesPlot<'mem, X> {
     //}
 }
 
-impl<'a, X: TimeseriesXAxis> egui::widgets::Widget for TimeseriesPlot<'a, X> {
+impl<'a, X: TimeseriesXAxis, Y: Default + num_traits::Float + num_traits::float::TotalOrder + Into<f64>> egui::widgets::Widget for TimeseriesPlot<'a, X, Y> {
     fn ui(mut self, ui: &mut Ui) -> Response {
         #[cfg(feature = "profiling")]
         puffin::profile_function!();

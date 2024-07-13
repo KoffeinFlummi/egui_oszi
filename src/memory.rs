@@ -8,15 +8,15 @@ use crate::traits::*;
 // a downsampling factor of 4.
 const DOWNSAMPLING_BUCKET_SIZE: usize = 8;
 
-const MAX_POINTS: usize = 2000; // TODO: use screen size
+const MAX_POINTS: usize = 4000; // TODO: use screen size
 
-const MAX_DOWNSAMPLING_STEPS: usize = 6;
+const MAX_DOWNSAMPLING_STEPS: usize = 5;
 
 #[derive(Debug)]
-struct CacheDescriptor<X> {
+struct CacheDescriptor<X, Y> {
     len: usize,
-    first_data_point: Option<(X, Option<f64>)>,
-    //last_data_point: Option<(X, Option<f64>)>,
+    first_data_point: Option<(X, Option<Y>)>,
+    //last_data_point: Option<(X, Option<Y>)>,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -27,21 +27,21 @@ pub enum DownsamplingMethod {
 }
 
 impl DownsamplingMethod {
-    fn downsample(&self, bucket: &[[f64; 2]]) -> [[f64; 2]; 2] {
+    fn downsample<Y: Default + num_traits::Float + num_traits::float::TotalOrder>(&self, bucket: &[(f64, Y)]) -> [(f64, Y); 2] {
         match self {
             Self::None => {
-                [[0.0, 0.0], [0.0, 0.0]] // TODO
+                [(0.0, Y::default()), (0.0, Y::default())] // TODO
             }
             Self::MinMax => {
                 let (min_i, min) = bucket
                     .iter()
                     .enumerate()
-                    .min_by(|(_, x), (_, y)| x[1].total_cmp(&y[1]))
+                    .min_by(|(_, x), (_, y)| x.1.total_cmp(&y.1))
                     .unwrap();
                 let (max_i, max) = bucket
                     .iter()
                     .enumerate()
-                    .max_by(|(_, x), (_, y)| x[1].total_cmp(&y[1]))
+                    .max_by(|(_, x), (_, y)| x.1.total_cmp(&y.1))
                     .unwrap();
                 match (min_i, max_i) {
                     (i, j) if i < j => [*min, *max],
@@ -49,23 +49,23 @@ impl DownsamplingMethod {
                 }
             }
             Self::Mean => {
-                [[0.0, 0.0], [0.0, 0.0]] // TODO
+                [(0.0, Y::default()), (0.0, Y::default())] // TODO
             }
         }
     }
 }
 
 #[derive(Debug)]
-pub struct TimeseriesLineMemory<X> {
+pub struct TimeseriesLineMemory<X, Y> {
     downsampling_method: DownsamplingMethod,
-    cached_data: Option<CacheDescriptor<X>>,
-    cache_levels: Vec<Vec<[f64; 2]>>,
+    cached_data: Option<CacheDescriptor<X, Y>>,
+    cache_levels: Vec<Vec<(f64, Y)>>,
     view_cache: Option<(PlotBounds, Vec<[f64; 2]>)>,
     // TODO: Fix x axis behaviour
     x_axis_origin: Option<X>,
 }
 
-impl<X: TimeseriesXAxis> TimeseriesLineMemory<X> {
+impl<X: TimeseriesXAxis, Y: Default + num_traits::Float + num_traits::float::TotalOrder + Into<f64>> TimeseriesLineMemory<X, Y> {
     fn new(downsampling_method: DownsamplingMethod) -> Self {
         Self {
             downsampling_method,
@@ -87,7 +87,7 @@ impl<X: TimeseriesXAxis> TimeseriesLineMemory<X> {
 
     fn rebuild_caches<
         'a,
-        I: Iterator<Item = (X, Option<f64>)> + ExactSizeIterator + DoubleEndedIterator + 'a,
+        I: Iterator<Item = (X, Option<Y>)> + ExactSizeIterator + DoubleEndedIterator + 'a,
     >(
         &mut self,
         data: I,
@@ -98,7 +98,7 @@ impl<X: TimeseriesXAxis> TimeseriesLineMemory<X> {
 
     fn extend_caches<
         'a,
-        I: Iterator<Item = (X, Option<f64>)> + ExactSizeIterator + DoubleEndedIterator + 'a,
+        I: Iterator<Item = (X, Option<Y>)> + ExactSizeIterator + DoubleEndedIterator + 'a,
     >(
         &mut self,
         data: I,
@@ -120,7 +120,7 @@ impl<X: TimeseriesXAxis> TimeseriesLineMemory<X> {
         //    self.cache_levels[0].push([x, y]);
         //}
 
-        let new = data.filter_map(|(t, y)| y.map(|y| [t.to_f64(&mut self.x_axis_origin), y]));
+        let new = data.filter_map(|(t, y)| y.map(|y| (t.to_f64(&mut self.x_axis_origin), y)));
         self.cache_levels[0].extend(new);
         //println!("first-layer update: {:?} ({:?}/{:?})", t.elapsed(), len - skip, len);
         //println!("first-layer update: {:?} ({:?})", t.elapsed(), len);
@@ -138,7 +138,7 @@ impl<X: TimeseriesXAxis> TimeseriesLineMemory<X> {
             self.cache_levels[i].truncate(len);
 
             let skip = self.cache_levels[i].len() * (DOWNSAMPLING_BUCKET_SIZE / 2);
-            let new: Vec<[f64; 2]> = (&self.cache_levels[i - 1][skip..])
+            let new: Vec<(f64, Y)> = (&self.cache_levels[i - 1][skip..])
                 .chunks(DOWNSAMPLING_BUCKET_SIZE)
                 .map(|c| self.downsampling_method.downsample(c))
                 .flatten()
@@ -150,7 +150,7 @@ impl<X: TimeseriesXAxis> TimeseriesLineMemory<X> {
 
     fn update_cache<
         'a,
-        I: Iterator<Item = (X, Option<f64>)> + ExactSizeIterator + DoubleEndedIterator + 'a,
+        I: Iterator<Item = (X, Option<Y>)> + ExactSizeIterator + DoubleEndedIterator + 'a,
     >(
         &mut self,
         iterator: I,
@@ -199,7 +199,7 @@ impl<X: TimeseriesXAxis> TimeseriesLineMemory<X> {
             .get(0)
             .map(|c| c.last())
             .flatten()
-            .map(|xy| xy[0])
+            .map(|xy| xy.0)
     }
 
     fn plot(&mut self, plot_bounds: PlotBounds) -> Vec<[f64; 2]> {
@@ -220,9 +220,9 @@ impl<X: TimeseriesXAxis> TimeseriesLineMemory<X> {
             // find beginning and end for the given plot bounds in the current
             // cache level by binary search.
             let (x_min, x_max) = (plot_bounds.min()[0], plot_bounds.max()[0]);
-            let i_begin = usize::max(1, cache_level.partition_point(|v| v[0] < x_min)) - 1;
+            let i_begin = usize::max(1, cache_level.partition_point(|v| v.0 < x_min)) - 1;
             let i_end = usize::min(
-                cache_level.partition_point(|v| v[0] <= x_max) + 1,
+                cache_level.partition_point(|v| v.0 <= x_max) + 1,
                 cache_level.len(),
             );
 
@@ -230,7 +230,7 @@ impl<X: TimeseriesXAxis> TimeseriesLineMemory<X> {
             // If not, keep going down the cache.
             let points = &cache_level[i_begin..i_end];
             if points.len() < MAX_POINTS || i == (num_cache_levels - 1) {
-                let mut points = points.to_vec();
+                let mut points: Vec<_> = points.iter().map(|(x, y)| [*x, (*y).into()]).collect();
 
                 // We also add the very first and very last points to the plotted
                 // data, even if they are not visible. This allows egui to
@@ -244,20 +244,22 @@ impl<X: TimeseriesXAxis> TimeseriesLineMemory<X> {
                     // This way we can still zoom in on some detail even if the
                     // first/last values have vastly different Y axis values.
                     let previous_first_y = points[0][1];
-                    points.insert(0, [cache_level[0][0], previous_first_y]);
+                    points.insert(0, [cache_level[0].0, previous_first_y.into()]);
                 }
 
                 if cache_level.len() > 1 && i_end < cache_level.len() - 1 && points.len() > 0 {
                     let previous_last_y = points[points.len() - 1][1];
-                    points.push([cache_level[cache_level.len() - 1][0], previous_last_y]);
+                    points.push([cache_level[cache_level.len() - 1].0, previous_last_y]);
                 }
+
+                let points_f64: Vec<_> = points.into_iter().map(|x| [x[0].into(), x[1].into()]).collect();
 
                 //if points.len() < 50 {
                 //    println!("{:?}", points.iter().map(|p| p[0]).collect::<Vec<_>>());
                 //}
 
-                self.view_cache = Some((plot_bounds, points.clone()));
-                return points;
+                self.view_cache = Some((plot_bounds, points_f64.clone()));
+                return points_f64;
             }
         }
 
@@ -317,16 +319,16 @@ impl TimeseriesGroup {
 ///   ones, calling [TimeseriesPlotMemory::clear_caches] when doing so is
 ///   recommended.
 #[derive(Debug)]
-pub struct TimeseriesPlotMemory<X> {
+pub struct TimeseriesPlotMemory<X, Y> {
     pub(crate) id: egui::Id,
-    lines: HashMap<String, TimeseriesLineMemory<X>>,
+    lines: HashMap<String, TimeseriesLineMemory<X, Y>>,
     downsampling_method: DownsamplingMethod,
     pub(crate) reset_auto_bounds_next_frame: bool,
     pub(crate) last_view_width: f64,
     pub(crate) last_auto_bounds: bool,
 }
 
-impl<X: TimeseriesXAxis> TimeseriesPlotMemory<X> {
+impl<X: TimeseriesXAxis, Y: Default + num_traits::Float + num_traits::float::TotalOrder + Into<f64>> TimeseriesPlotMemory<X, Y> {
     /// Create a new memory struct with a unique id.
     pub fn new<I: Into<egui::Id>>(id: I) -> Self {
         Self {
@@ -364,7 +366,7 @@ impl<X: TimeseriesXAxis> TimeseriesPlotMemory<X> {
     /// frame.
     pub fn update_cache<
         'a,
-        I: Iterator<Item = (X, Option<f64>)> + ExactSizeIterator + DoubleEndedIterator + 'a,
+        I: Iterator<Item = (X, Option<Y>)> + ExactSizeIterator + DoubleEndedIterator + 'a,
     >(
         &mut self,
         line_id: &String,
